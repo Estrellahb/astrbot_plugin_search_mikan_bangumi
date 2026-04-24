@@ -152,7 +152,7 @@ class MikanSearchPlugin(Star):
 
         return parts[1].strip()
 
-    @filter.command("搜番")
+    @filter.command("蜜柑搜番")
     async def search_mikan(self, event: AstrMessageEvent):
         """根据番剧名搜索 Mikan RSS 并返回格式化结果。"""
         keyword = self._extract_keyword(event)

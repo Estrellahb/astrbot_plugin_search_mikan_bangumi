@@ -11,7 +11,7 @@ python -m py_compile main.py
 python -m pytest
 ```
 
-Use `py_compile` for a fast syntax check before committing. Run `pytest` only after adding tests; the repository does not currently ship a test suite. For full integration testing, load the plugin inside an AstrBot instance from `data/plugins/astrbot_plugin_search_mikan_bangumi` and invoke the `搜番` command in chat.
+Use `py_compile` for a fast syntax check before committing. Run `pytest` only after adding tests; the repository does not currently ship a test suite. For full integration testing, load the plugin inside an AstrBot instance from `data/plugins/astrbot_plugin_search_mikan_bangumi` and invoke the `蜜柑搜番` command in chat.
 
 ## Coding Style & Naming Conventions
 Follow Python conventions: 4-space indentation, `snake_case` for functions and variables, `UPPER_SNAKE_CASE` for module constants such as `MIKAN_RSS_SEARCH_URL`, and `CapWords` for classes like `MikanSearchPlugin`. Keep async handlers non-blocking; wrap synchronous network I/O with `asyncio.to_thread`, as done in `search_mikan`. Prefer standard-library dependencies unless AstrBot already requires something heavier. Keep comments short and only where intent is not obvious.
