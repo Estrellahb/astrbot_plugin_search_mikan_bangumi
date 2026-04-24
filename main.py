@@ -5,7 +5,7 @@ from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
 from astrbot.api import logger
-from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.star import Context, Star
 
 MIKAN_RSS_SEARCH_URL = "https://mikan.tangbai.cc/RSS/Search?searchstr="
@@ -85,8 +85,38 @@ class MikanSearchPlugin(Star):
         return ""
 
     def _format_pub_date(self, pub_date: str) -> str:
-        """把 ISO 时间里的 T 替换为空格，提升聊天消息可读性。"""
-        return pub_date.replace("T", " ", 1)
+        """把发布时间格式化为中文日期，提升聊天消息可读性。"""
+        if len(pub_date) > 10 and pub_date[10] == "T":
+            normalized = f"{pub_date[:10]} {pub_date[11:]}"
+        else:
+            normalized = pub_date
+        date_part, separator, time_part = normalized.partition(" ")
+        date_values = date_part.split("-")
+
+        if len(date_values) != 3:
+            return normalized
+
+        year, month, day = date_values
+        if not (year.isdigit() and month.isdigit() and day.isdigit()):
+            return normalized
+
+        formatted_date = f"{year}年{month}月{day}日"
+        if not separator:
+            return formatted_date
+
+        return f"{formatted_date} {time_part}"
+
+    async def _send_search_result(self, event: AstrMessageEvent, text: str) -> bool:
+        """QQ 官方平台使用主动消息发送，降低引用回复中链接不变蓝的概率。"""
+        if event.get_platform_name() != "qq_official":
+            return False
+
+        try:
+            await self.context.send_message(event.unified_msg_origin, MessageChain().message(text))
+            return True
+        except Exception:
+            logger.exception("Send Mikan result with active QQ message failed")
+            return False
 
     def _parse_rss_items(self, rss_text: str) -> list[dict[str, str]]:
         """解析 RSS 条目，提取聊天回复需要展示的字段。"""
@@ -176,7 +206,11 @@ class MikanSearchPlugin(Star):
             return
 
         logger.info("Mikan RSS request succeeded for keyword=%s", keyword)
-        yield event.plain_result(self._format_search_result(keyword, items))
+        result_text = self._format_search_result(keyword, items)
+        if await self._send_search_result(event, result_text):
+            return
+
+        yield event.plain_result(result_text)
 
     async def terminate(self):
         """插件销毁钩子。当前阶段不需要清理逻辑。"""
