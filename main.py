@@ -1,7 +1,7 @@
 import asyncio
 from html import unescape
 from xml.etree import ElementTree
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 from urllib.request import Request, urlopen
 
 from astrbot.api import logger
@@ -104,7 +104,11 @@ class MikanSearchPlugin(Star):
         if not separator:
             return formatted_date
 
-        return f"{formatted_date} {time_part}"
+        hour_minute = ":".join(time_part.split(":")[:2])
+        if not hour_minute:
+            return formatted_date
+
+        return f"{formatted_date} {hour_minute}"
 
     async def _send_search_result(self, event: AstrMessageEvent, text: str) -> bool:
         """QQ 官方平台使用主动消息发送，降低引用回复中链接不变蓝的概率。"""
@@ -118,6 +122,18 @@ class MikanSearchPlugin(Star):
             logger.exception("Send Mikan result with active QQ message failed")
             return False
 
+    def _build_magnet_url(self, page_url: str) -> str:
+        """从 Mikan 详情页链接中提取哈希并构造磁力链接。"""
+        path_parts = [part for part in urlparse(page_url).path.split("/") if part]
+        if len(path_parts) < 3 or path_parts[-2] != "Episode":
+            return ""
+
+        info_hash = path_parts[-1]
+        if not info_hash:
+            return ""
+
+        return f"magnet:?xt=urn:btih:{info_hash}"
+
     def _parse_rss_items(self, rss_text: str) -> list[dict[str, str]]:
         """解析 RSS 条目，提取聊天回复需要展示的字段。"""
         root = ElementTree.fromstring(rss_text)
@@ -128,7 +144,6 @@ class MikanSearchPlugin(Star):
                 continue
 
             link = self._child_text(item, "link")
-            torrent_url = self._child_attr(item, "enclosure", "url") or link
             # Mikan 的大小可能在 enclosure.length，也可能在 torrent.contentLength。
             content_length = self._child_attr(item, "enclosure", "length") or self._descendant_text(
                 item,
@@ -139,7 +154,7 @@ class MikanSearchPlugin(Star):
                 {
                     "title": self._child_text(item, "title") or "未命名条目",
                     "link": link,
-                    "torrent_url": torrent_url,
+                    "magnet_url": self._build_magnet_url(link),
                     "pub_date": self._format_pub_date(pub_date),
                     "size": self._format_content_length(content_length),
                 }
@@ -163,10 +178,8 @@ class MikanSearchPlugin(Star):
                 lines.append(f"发布时间: {item['pub_date']}")
             if item["size"]:
                 lines.append(f"大小: {item['size']}")
-            if item["link"]:
-                lines.append(f"页面: {item['link']}")
-            if item["torrent_url"]:
-                lines.append(f"Torrent: {item['torrent_url']}")
+            if item["magnet_url"]:
+                lines.append(f"磁力链接: {item['magnet_url']}")
 
         return "\n".join(lines)
 
